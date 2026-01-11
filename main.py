@@ -127,13 +127,18 @@ elif pagina == "Agenda Appuntamenti":
                 df_app['Cliente'] = df_app['clienti'].apply(lambda x: f"{x['nome']} {x['cognome']}" if x else "N/A")
                 df_app = df_app.sort_values(by='data_ora', ascending=False)
 
-                # Funzione per colorare lo Stato
+                # Funzione per colorare lo Stato (Versione Socio Pro)
                 def color_stato(val):
-                    if val == 'Effettuato': color = '#d4edda' # Verde chiaro
-                    elif val == 'Annullato': color = '#f8d7da' # Rosso chiaro
-                    elif val == 'In attesa': color = '#fff3cd' # Giallo chiaro
-                    else: color = 'white'
-                    return f'background-color: {color}'
+                    v = str(val).strip() # Toglie spazi bianchi fastidiosi
+                    
+                    if v == 'Effettuato': 
+                        return 'background-color: #d4edda' # Verde
+                    elif v == 'Annullato': 
+                        return 'background-color: #f8d7da' # Rosso
+                    elif v in ['In attesa', 'Da effettuare']: 
+                        return 'background-color: #fff3cd' # Giallo
+                    else: 
+                        return '' # Nessun colore
 
                 # Applichiamo lo stile
                 df_styled = df_app[['Data e Ora', 'Immobile', 'Cliente', 'esito', 'commenti']].style.applymap(color_stato, subset=['esito'])
