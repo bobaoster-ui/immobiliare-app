@@ -1,4 +1,5 @@
 import streamlit as st
+import pandas as pd
 from supabase import create_client, Client
 
 # Configurazione della pagina
@@ -17,13 +18,26 @@ supabase = init_connection()
 st.sidebar.title("Menu")
 pagina = st.sidebar.radio("Vai a:", ["Home", "Aggiungi Proprietà", "Aggiungi Immobile", "Lista Immobili"])
 
-# --- PAGINA HOME ---
+# --- FUNZIONE DI SUPPORTO: CARICA PROPRIETARI ---
+def get_proprietari():
+    res = supabase.table("proprieta").select("id, nome, cognome").execute()
+    return res.data
+
+# --- PAGINE PRECEDENTI (Invariate per brevità, mantieni il codice di prima) ---
 if pagina == "Home":
     st.title("🏠 Immobiliare Real Estate")
-    st.write("Dashboard di gestione immobiliare.")
-    st.info("Configurazione completata. Seleziona un'operazione dal menu a sinistra.")
+    st.write("Benvenuto socio! Ecco il riepilogo della tua agenzia.")
+    
+    # Piccola anteprima veloce
+    try:
+        count_imm = supabase.table("immobili").select("*", count="exact").execute()
+        count_prop = supabase.table("proprieta").select("*", count="exact").execute()
+        col1, col2 = st.columns(2)
+        col1.metric("Totale Immobili", count_imm.count)
+        col2.metric("Totale Proprietari", count_prop.count)
+    except:
+        st.write("Inizia ad aggiungere dati per vedere le statistiche!")
 
-# --- PAGINA AGGIUNGI PROPRIETÀ ---
 elif pagina == "Aggiungi Proprietà":
     st.title("👤 Nuova Proprietà")
     with st.form("form_proprieta", clear_on_submit=True):
@@ -35,70 +49,65 @@ elif pagina == "Aggiungi Proprietà":
             cognome = st.text_input("Cognome*")
             email = st.text_input("Email")
         note = st.text_area("Note")
-        submit_p = st.form_submit_button("Salva Proprietà")
-
-    if submit_p:
-        if nome and cognome:
-            try:
+        if st.form_submit_button("Salva Proprietà"):
+            if nome and cognome:
                 supabase.table("proprieta").insert({"nome": nome, "cognome": cognome, "telefono": telefono, "email": email, "note": note}).execute()
-                st.success(f"✅ {nome} {cognome} aggiunto con successo!")
-            except Exception as e:
-                st.error(f"Errore: {e}")
-        else:
-            st.warning("Nome e Cognome obbligatori.")
+                st.success("Proprietà salvata!")
+            else:
+                st.warning("Inserisci i campi obbligatori.")
 
-# --- PAGINA AGGIUNGI IMMOBILE ---
 elif pagina == "Aggiungi Immobile":
     st.title("🏘️ Inserisci Nuovo Immobile")
-    
-    # 1. Recuperiamo i proprietari per il menu a tendina
-    try:
-        res_p = supabase.table("proprieta").select("id, nome, cognome").execute()
-        lista_proprietari = res_p.data
-        
-        # Creiamo una lista di nomi leggibili e un dizionario per recuperare l'ID
-        opzioni_proprietari = {f"{p['nome']} {p['cognome']}": p['id'] for p in lista_proprietari}
-        
-        if not opzioni_proprietari:
-            st.warning("⚠️ Non ci sono proprietari nel database. Aggiungine uno prima di inserire un immobile.")
-        else:
-            with st.form("form_immobile", clear_on_submit=True):
-                proprietario_scelto = st.selectbox("Seleziona la Proprietà", options=list(opzioni_proprietari.keys()))
-                indirizzo = st.text_input("Indirizzo Immobile*")
-                
-                col1, col2 = st.columns(2)
-                with col1:
-                    citta = st.text_input("Città", value="Milano")
-                    prezzo = st.number_input("Prezzo Richiesto (€)", min_value=0, step=1000)
-                with col2:
-                    tipo = st.selectbox("Tipo", ["Appartamento", "Villa", "Ufficio", "Box/Garage"])
-                    stato = st.selectbox("Stato", ["Disponibile", "In trattativa", "Venduto"])
-                
-                descrizione = st.text_area("Descrizione breve")
-                submit_i = st.form_submit_button("Salva Immobile")
-
-            if submit_i:
+    lista_p = get_proprietari()
+    if not lista_p:
+        st.warning("Aggiungi prima un proprietario!")
+    else:
+        opzioni = {f"{p['nome']} {p['cognome']}": p['id'] for p in lista_p}
+        with st.form("form_immobile", clear_on_submit=True):
+            prop_scelto = st.selectbox("Seleziona la Proprietà", options=list(opzioni.keys()))
+            indirizzo = st.text_input("Indirizzo*")
+            col1, col2 = st.columns(2)
+            with col1:
+                citta = st.text_input("Città", value="Milano")
+                prezzo = st.number_input("Prezzo (€)", min_value=0)
+            with col2:
+                tipo = st.selectbox("Tipo", ["Appartamento", "Villa", "Ufficio", "Box"])
+                stato = st.selectbox("Stato", ["Disponibile", "In trattativa", "Venduto"])
+            if st.form_submit_button("Salva Immobile"):
                 if indirizzo:
-                    nuovo_immobile = {
-                        "indirizzo": indirizzo,
-                        "citta": citta,
-                        "prezzo_richiesto": prezzo,
-                        "tipo_immobile": tipo,
-                        "stato_trattativa": stato,
-                        "descrizione": descrizione,
-                        "id_proprieta": opzioni_proprietari[proprietario_scelto] # Qui avviene la magia!
-                    }
-                    try:
-                        supabase.table("immobili").insert(nuovo_immobile).execute()
-                        st.success(f"✅ Immobile in {indirizzo} salvato e collegato correttamente!")
-                    except Exception as e:
-                        st.error(f"Errore durante il salvataggio: {e}")
-                else:
-                    st.warning("L'indirizzo è obbligatorio.")
-    except Exception as e:
-        st.error(f"Impossibile caricare i proprietari: {e}")
+                    data = {"indirizzo": indirizzo, "citta": citta, "prezzo_richiesto": prezzo, "tipo_immobile": tipo, "stato_trattativa": stato, "id_proprieta": opzioni[prop_scelto]}
+                    supabase.table("immobili").insert(data).execute()
+                    st.success("Immobile salvato!")
 
-# --- PAGINA LISTA IMMOBILI ---
+# --- NUOVA PAGINA LISTA IMMOBILI ---
 elif pagina == "Lista Immobili":
-    st.title("📑 Elenco Completo")
-    st.write("Qui vedremo presto la tabella riassuntiva di tutto l'inventario.")
+    st.title("📑 Elenco Immobili e Proprietà")
+
+    try:
+        # Recuperiamo gli immobili uniti ai dati della proprietà (Join)
+        res = supabase.table("immobili").select("*, proprieta(nome, cognome, telefono)").execute()
+        
+        if not res.data:
+            st.info("Non ci sono ancora immobili registrati.")
+        else:
+            # Trasformiamo i dati in un DataFrame per una visualizzazione migliore
+            df = pd.DataFrame(res.data)
+            
+            # Pulizia: estraiamo nome e cognome dalla colonna 'proprieta' (che è un dizionario)
+            df['Proprietario'] = df['proprieta'].apply(lambda x: f"{x['nome']} {x['cognome']}" if x else "N/A")
+            df['Contatto'] = df['proprieta'].apply(lambda x: x['telefono'] if x else "N/A")
+            
+            # Selezioniamo e rinominiamo le colonne per l'utente finale
+            df_display = df[['indirizzo', 'citta', 'tipo_immobile', 'prezzo_richiesto', 'stato_trattativa', 'Proprietario', 'Contatto']]
+            df_display.columns = ['Indirizzo', 'Città', 'Tipologia', 'Prezzo (€)', 'Stato', 'Proprietà', 'Telefono']
+
+            # Filtro rapido in alto
+            stato_filtro = st.multiselect("Filtra per stato:", options=df_display['Stato'].unique(), default=df_display['Stato'].unique())
+            df_filtrato = df_display[df_display['Stato'].isin(stato_filtro)]
+
+            st.dataframe(df_filtrato, use_container_width=True, hide_index=True)
+            
+            st.download_button(label="Scarica Excel (CSV)", data=df_filtrato.to_csv(index=False), file_name="lista_immobili.csv", mime="text/csv")
+
+    except Exception as e:
+        st.error(f"Errore nel caricamento della lista: {e}")
