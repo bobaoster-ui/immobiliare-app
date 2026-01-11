@@ -62,7 +62,9 @@ elif pagina == "Immobili":
 # --- SEZIONE CLIENTI ---
 elif pagina == "Clienti (Acquirenti)":
     st.title("🤝 Database Clienti")
-    with st.form("c_form"):
+# Modifica la riga del form dei clienti così: in questo modo con clear_on_submit svuota la maschera e predispone per
+# un nuovo inserimento
+    with st.form("c_form", clear_on_submit=True):
         col1, col2 = st.columns(2)
         nome_c = col1.text_input("Nome Cliente*")
         cognome_c = col2.text_input("Cognome Cliente*")
