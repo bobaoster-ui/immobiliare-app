@@ -92,14 +92,17 @@ elif pagina == "Agenda Appuntamenti":
         else:
             ops_c = {f"{c['nome']} {c['cognome']}": c['id'] for c in clienti_res.data}
             ops_i = {i['indirizzo']: i['id'] for i in immobili_res.data}
-            
+
             with st.form("app_form", clear_on_submit=True):
                 c_scelto = st.selectbox("Seleziona Cliente", options=list(ops_c.keys()))
                 i_scelto = st.selectbox("Seleziona Immobile", options=list(ops_i.keys()))
                 
-                # Qui impostiamo il formato visivo della data
-                data_app = st.date_input("Data Appuntamento", value=datetime.now(), format="DD/MM/YYYY")
-                ora_app = st.time_input("Ora Appuntamento")
+                col_d, col_o, col_s = st.columns(3)
+                data_app = col_d.date_input("Data", value=datetime.now(), format="DD/MM/YYYY")
+                ora_app = col_o.time_input("Ora")
+                # NUOVO CAMPO STATO
+                stato_app = col_s.selectbox("Stato", ["In attesa", "Effettuato", "Annullato"])
+                
                 note_app = st.text_area("Note appuntamento")
                 
                 if st.form_submit_button("Fissa Appuntamento"):
@@ -108,24 +111,34 @@ elif pagina == "Agenda Appuntamenti":
                         "id_cliente": ops_c[c_scelto],
                         "id_immobile": ops_i[i_scelto],
                         "data_ora": dt_string,
+                        "esito": stato_app, # Salviamo lo stato
                         "commenti": note_app
                     }).execute()
-                    st.success(f"✅ Appuntamento fissato con successo!")
-                    st.balloons() # Un po' di festa per il socio!
+                    st.success(f"✅ Appuntamento registrato!")
+                    st.balloons()            
 
     with t2:
-        res_app = supabase.table("appuntamenti").select("data_ora, commenti, immobili(indirizzo), clienti(nome, cognome)").execute()
-        if res_app.data:
-            df_app = pd.DataFrame(res_app.data)
-            # Formattazione italiana per la tabella
-            df_app['Data e Ora'] = pd.to_datetime(df_app['data_ora']).dt.strftime('%d/%m/%Y %H:%M')
-            df_app['Immobile'] = df_app['immobili'].apply(lambda x: x['indirizzo'] if x else "N/A")
-            df_app['Cliente'] = df_app['clienti'].apply(lambda x: f"{x['nome']} {x['cognome']}" if x else "N/A")
-            
-            # Ordiniamo per data (dalla più recente)
-            df_app = df_app.sort_values(by='data_ora', ascending=False)
-            
-            st.table(df_app[['Data e Ora', 'Immobile', 'Cliente', 'commenti']])
+            # Recuperiamo anche la colonna 'esito'
+            res_app = supabase.table("appuntamenti").select("data_ora, esito, commenti, immobili(indirizzo), clienti(nome, cognome)").execute()
+            if res_app.data:
+                df_app = pd.DataFrame(res_app.data)
+                df_app['Data e Ora'] = pd.to_datetime(df_app['data_ora']).dt.strftime('%d/%m/%Y %H:%M')
+                df_app['Immobile'] = df_app['immobili'].apply(lambda x: x['indirizzo'] if x else "N/A")
+                df_app['Cliente'] = df_app['clienti'].apply(lambda x: f"{x['nome']} {x['cognome']}" if x else "N/A")
+                df_app = df_app.sort_values(by='data_ora', ascending=False)
+
+                # Funzione per colorare lo Stato
+                def color_stato(val):
+                    if val == 'Effettuato': color = '#d4edda' # Verde chiaro
+                    elif val == 'Annullato': color = '#f8d7da' # Rosso chiaro
+                    elif val == 'In attesa': color = '#fff3cd' # Giallo chiaro
+                    else: color = 'white'
+                    return f'background-color: {color}'
+
+                # Applichiamo lo stile
+                df_styled = df_app[['Data e Ora', 'Immobile', 'Cliente', 'esito', 'commenti']].style.applymap(color_stato, subset=['esito'])
+                
+                st.dataframe(df_styled, use_container_width=True, hide_index=True)
 
 # --- DASHBOARD (HOME) ---
 else:
