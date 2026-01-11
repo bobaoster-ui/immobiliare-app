@@ -126,23 +126,29 @@ elif pagina == "Immobili":
                             supabase.storage.from_("foto_immobili").upload(file_path, file.getvalue())
                     
                     st.success("Immobile e foto salvati con successo!")
-
     with t2:
         res_i = supabase.table("immobili").select("*, proprieta(nome, cognome)").execute()
         if res_i.data:
             for imm in res_i.data:
+                # Usiamo l'expander per non creare una pagina infinita
                 with st.expander(f"🏠 {imm['indirizzo']} - {imm['prezzo_richiesto']}€"):
                     st.write(f"Proprietario: {imm['proprieta']['nome']} {imm['proprieta']['cognome']}")
                     
-                    # --- NUOVO: Recupero e Visualizzazione Galleria ---
-                    files = supabase.storage.from_("foto_immobili").list(str(imm['id']))
-                    if files:
-                        cols = st.columns(3) # Griglia a 3 colonne
-                        for idx, f_info in enumerate(files):
-                            img_url = supabase.storage.from_("foto_immobili").get_public_url(f"{imm['id']}/{f_info['name']}")
-                            cols[idx % 3].image(img_url, use_container_width=True)
-                    else:
-                        st.info("Nessuna foto disponibile per questo immobile.")
+                    # --- RECUPERO DI TUTTE LE FOTO NELLA CARTELLA ---
+                    try:
+                        files = supabase.storage.from_("foto_immobili").list(str(imm['id']))
+                        if files:
+                            st.write("📸 Galleria Immagini:")
+                            cols = st.columns(3) # Crea una griglia a 3 colonne
+                            for idx, f_info in enumerate(files):
+                                # Genera l'URL pubblico per ogni singola foto trovata
+                                img_url = supabase.storage.from_("foto_immobili").get_public_url(f"{imm['id']}/{f_info['name']}")
+                                # La visualizza nella colonna corretta (0, 1 o 2)
+                                cols[idx % 3].image(img_url, use_container_width=True)
+                        else:
+                            st.info("Nessuna foto presente per questo immobile.")
+                    except Exception as e:
+                        st.error(f"Errore nel caricamento galleria: {e}")
 # --- PAGINA: CLIENTI ---
 elif pagina == "Clienti (Acquirenti)":
     st.title("🤝 Database Clienti")
