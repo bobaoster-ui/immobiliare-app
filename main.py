@@ -93,25 +93,56 @@ elif pagina == "Proprietà (Venditori)":
 elif pagina == "Immobili":
     st.title("🏘️ Gestione Immobili")
     t1, t2 = st.tabs(["➕ Aggiungi Immobile", "📋 Catalogo"])
+    
     with t1:
         res_p = supabase.table("proprieta").select("id, nome, cognome").execute()
-        if not res_p.data: st.warning("Aggiungi prima un proprietario!")
+        if not res_p.data:
+            st.warning("Aggiungi prima un proprietario!")
         else:
             ops = {f"{p['nome']} {p['cognome']}": p['id'] for p in res_p.data}
             with st.form("i_form", clear_on_submit=True):
                 prop = st.selectbox("Proprietario", options=list(ops.keys()))
                 ind = st.text_input("Indirizzo*")
                 prezzo = st.number_input("Prezzo (€)", min_value=0, step=5000)
+                
+                # --- NUOVO: Caricamento Foto ---
+                uploaded_files = st.file_uploader("Carica foto dell'immobile", accept_multiple_files=True, type=['png', 'jpg', 'jpeg'])
+                
                 if st.form_submit_button("Salva Immobile"):
-                    supabase.table("immobili").insert({"indirizzo": ind, "prezzo_richiesto": prezzo, "id_proprieta": ops[prop]}).execute()
-                    st.success("Immobile salvato!")
+                    # 1. Salva dati immobile
+                    new_imm = supabase.table("immobili").insert({
+                        "indirizzo": ind, 
+                        "prezzo_richiesto": prezzo, 
+                        "id_proprieta": ops[prop]
+                    }).execute()
+                    
+                    imm_id = new_imm.data[0]['id']
+                    
+                    # 2. Carica le foto nello Storage
+                    if uploaded_files:
+                        for i, file in enumerate(uploaded_files):
+                            # Creiamo un nome unico: ID_IMMO_0.jpg, ID_IMMO_1.jpg...
+                            file_path = f"{imm_id}/foto_{i}.jpg"
+                            supabase.storage.from_("foto_immobili").upload(file_path, file.getvalue())
+                    
+                    st.success("Immobile e foto salvati con successo!")
+
     with t2:
         res_i = supabase.table("immobili").select("*, proprieta(nome, cognome)").execute()
         if res_i.data:
-            df_i = pd.DataFrame(res_i.data)
-            df_i['Proprietario'] = df_i['proprieta'].apply(lambda x: f"{x['nome']} {x['cognome']}" if x else "N/A")
-            st.dataframe(df_i[['indirizzo', 'prezzo_richiesto', 'Proprietario']], use_container_width=True, hide_index=True)
-
+            for imm in res_i.data:
+                with st.expander(f"🏠 {imm['indirizzo']} - {imm['prezzo_richiesto']}€"):
+                    st.write(f"Proprietario: {imm['proprieta']['nome']} {imm['proprieta']['cognome']}")
+                    
+                    # --- NUOVO: Recupero e Visualizzazione Galleria ---
+                    files = supabase.storage.from_("foto_immobili").list(str(imm['id']))
+                    if files:
+                        cols = st.columns(3) # Griglia a 3 colonne
+                        for idx, f_info in enumerate(files):
+                            img_url = supabase.storage.from_("foto_immobili").get_public_url(f"{imm['id']}/{f_info['name']}")
+                            cols[idx % 3].image(img_url, use_container_width=True)
+                    else:
+                        st.info("Nessuna foto disponibile per questo immobile.")
 # --- PAGINA: CLIENTI ---
 elif pagina == "Clienti (Acquirenti)":
     st.title("🤝 Database Clienti")
