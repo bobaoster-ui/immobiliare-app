@@ -78,18 +78,17 @@ elif pagina == "Clienti (Acquirenti)":
         res_c = supabase.table("clienti").select("*").execute()
         if res_c.data: st.dataframe(pd.DataFrame(res_c.data)[['nome', 'cognome', 'budget_max']], use_container_width=True, hide_index=True)
 
-# --- PAGINA: AGENDA APPUNTAMENTI ---
+# --- PAGINA: AGENDA APPUNTAMENTI (Versione Rifinita) ---
 elif pagina == "Agenda Appuntamenti":
     st.title("📅 Agenda Visite")
     t1, t2 = st.tabs(["➕ Nuova Visita", "📋 Calendario"])
     
     with t1:
-        # Recuperiamo dati per i menu a tendina
         clienti_res = supabase.table("clienti").select("id, nome, cognome").execute()
         immobili_res = supabase.table("immobili").select("id, indirizzo").execute()
         
         if not clienti_res.data or not immobili_res.data:
-            st.warning("Assicurati di avere almeno un cliente e un immobile nel database.")
+            st.warning("Aggiungi prima clienti e immobili!")
         else:
             ops_c = {f"{c['nome']} {c['cognome']}": c['id'] for c in clienti_res.data}
             ops_i = {i['indirizzo']: i['id'] for i in immobili_res.data}
@@ -97,7 +96,9 @@ elif pagina == "Agenda Appuntamenti":
             with st.form("app_form", clear_on_submit=True):
                 c_scelto = st.selectbox("Seleziona Cliente", options=list(ops_c.keys()))
                 i_scelto = st.selectbox("Seleziona Immobile", options=list(ops_i.keys()))
-                data_app = st.date_input("Data Appuntamento", value=datetime.now())
+                
+                # Qui impostiamo il formato visivo della data
+                data_app = st.date_input("Data Appuntamento", value=datetime.now(), format="DD/MM/YYYY")
                 ora_app = st.time_input("Ora Appuntamento")
                 note_app = st.text_area("Note appuntamento")
                 
@@ -109,17 +110,22 @@ elif pagina == "Agenda Appuntamenti":
                         "data_ora": dt_string,
                         "commenti": note_app
                     }).execute()
-                    st.success(f"Appuntamento fissato per {c_scelto} in {i_scelto}!")
+                    st.success(f"✅ Appuntamento fissato con successo!")
+                    st.balloons() # Un po' di festa per il socio!
 
     with t2:
-        # Visualizzazione con doppio Join (Immobile + Cliente)
         res_app = supabase.table("appuntamenti").select("data_ora, commenti, immobili(indirizzo), clienti(nome, cognome)").execute()
         if res_app.data:
             df_app = pd.DataFrame(res_app.data)
+            # Formattazione italiana per la tabella
             df_app['Data e Ora'] = pd.to_datetime(df_app['data_ora']).dt.strftime('%d/%m/%Y %H:%M')
             df_app['Immobile'] = df_app['immobili'].apply(lambda x: x['indirizzo'] if x else "N/A")
             df_app['Cliente'] = df_app['clienti'].apply(lambda x: f"{x['nome']} {x['cognome']}" if x else "N/A")
-            st.dataframe(df_app[['Data e Ora', 'Immobile', 'Cliente', 'commenti']], use_container_width=True, hide_index=True)
+            
+            # Ordiniamo per data (dalla più recente)
+            df_app = df_app.sort_values(by='data_ora', ascending=False)
+            
+            st.table(df_app[['Data e Ora', 'Immobile', 'Cliente', 'commenti']])
 
 # --- DASHBOARD (HOME) ---
 else:
