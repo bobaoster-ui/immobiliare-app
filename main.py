@@ -17,9 +17,61 @@ supabase = init_connection()
 st.sidebar.title("💎 Real Estate Pro")
 pagina = st.sidebar.selectbox("Gestione:", 
     ["Dashboard", "Proprietà (Venditori)", "Immobili", "Clienti (Acquirenti)", "Agenda Appuntamenti"])
+# --- DASHBOARD (HOME) ---
+
+# --- 1. QUI INIZIA LA DASHBOARD (Sotto il primo IF) ---
+if pagina == "Dashboard":
+    st.title("📊 Torre di Controllo Agenzia")
+    
+    # Tutto questo blocco è spostato di un TAB (4 spazi) a destra
+    col1, col2, col3, col4 = st.columns(4)
+    
+    count_prop = len(supabase.table("proprieta").select("id").execute().data)
+    count_imm = len(supabase.table("immobili").select("id").execute().data)
+    count_cli = len(supabase.table("clienti").select("id").execute().data)
+    count_app = len(supabase.table("appuntamenti").select("id").execute().data)
+
+    col1.metric("🏠 Immobili", count_imm)
+    col2.metric("👤 Proprietà", count_prop)
+    col3.metric("🤝 Clienti", count_cli)
+    col4.metric("📅 Visite Totali", count_app)
+
+    st.divider()
+
+    st.subheader("🕒 Prossime Visite in Agenda")
+    res_dash = supabase.table("appuntamenti").select(
+        "data_ora, esito, immobili(indirizzo), clienti(nome, cognome)"
+    ).order("data_ora").execute()
+
+    if res_dash.data:
+        df_dash = pd.DataFrame(res_dash.data)
+        df_dash['Data'] = pd.to_datetime(df_dash['data_ora'])
+        df_dash['Orario'] = df_dash['Data'].dt.strftime('%d/%m/%Y %H:%M')
+        df_dash['Immobile'] = df_dash['immobili'].apply(lambda x: x['indirizzo'] if x else "N/A")
+        df_dash['Cliente'] = df_dash['clienti'].apply(lambda x: f"{x['nome']} {x['cognome']}" if x else "N/A")
+        
+        st.dataframe(
+            df_dash[['Orario', 'Immobile', 'Cliente', 'esito']].head(5), 
+            use_container_width=True, 
+            hide_index=True
+        )
+    else:
+        st.info("Non ci sono appuntamenti in programma.")
+
+    st.divider()
+
+    # 3. AZIONI RAPIDE
+    st.subheader("⚡ Azioni Rapide")
+    c_a, c_b, c_c = st.columns(3)
+    if c_a.button("➕ Nuovo Immobile", use_container_width=True):
+        st.info("Vai alla sezione Immobili dal menu a sinistra!")
+    if c_b.button("📅 Fissa Appuntamento", use_container_width=True):
+        st.info("Vai alla sezione Agenda dal menu a sinistra!")
+    if c_c.button("📥 Esporta Dati", use_container_width=True):
+        st.write("Funzione in arrivo...")
 
 # --- PAGINA: PROPRIETÀ ---
-if pagina == "Proprietà (Venditori)":
+elif pagina == "Proprietà (Venditori)":
     st.title("👤 Gestione Proprietà")
     t1, t2 = st.tabs(["➕ Aggiungi", "📋 Elenco"])
     with t1:
